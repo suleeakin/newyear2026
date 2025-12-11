@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎄 Gizli Yılbaşı Çekilişi 🎁</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    
+    <style>
+        /* CSS Stil Kodları */
+        body { 
+            font-family: 'Arial', sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 20px;
+            background-color: #f4f4f9; 
+            color: #333; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 400px; 
+            width: 100%;
+            margin: 0 auto; 
+            padding: 30px; 
+            border-radius: 15px; 
+            background-color: #fff; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2); 
+        }
+        h1 { 
+            color: #e74c3c; /* Kırmızı */
+            margin-bottom: 25px;
+            font-size: 28px;
+        }
+        p {
+            margin-bottom: 20px;
+        }
+        select, button { 
+            padding: 12px; 
+            margin: 10px 0; 
+            width: 100%; 
+            box-sizing: border-box; 
+            border-radius: 8px; 
+            font-size: 16px;
+        }
+        select {
+            border: 2px solid #bdc3c7;
+            background-color: #ecf0f1;
+        }
+        button { 
+            background-color: #2ecc71; /* Yeşil */
+            color: white; 
+            cursor: pointer; 
+            border: none; 
+            transition: background-color 0.3s;
+        }
+        button:hover:not(:disabled) { 
+            background-color: #27ae60; 
+        }
+        button:disabled {
+            background-color: #95a5a6; /* Gri */
+            cursor: not-allowed;
+        }
+        #sonuc { 
+            margin-top: 30px; 
+            font-size: 26px; 
+            font-weight: bold; 
+            color: #2980b9; /* Mavi */
+            padding: 15px; 
+            background-color: #eaf4ff; 
+            border-radius: 10px; 
+            min-height: 30px;
+        }
+        .uyari { 
+            color: #7f8c8d; 
+            font-size: 12px; 
+            margin-top: 20px; 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🎁 Gizli Yılbaşı Çekilişi </h1>
+        <p>Lütfen listeden **kendi isminizi** seçin:</p>
+        
+        <select id="kisiSecimi">
+            </select>
+
+        <button id="cekilisYapButon">Kimin Hediyesi Olacağım?</button>
+        
+        <div id="sonuc">Sonuç yükleniyor veya henüz çekiliş yapılmadı...</div>
+
+        <p class="uyari">Sonuç sadece sizin cihazınızda ve veritabanında gizli olarak saklanır. Başka kimse göremez.</p>
+    </div>
+
+    <script>
+        // ***************************************************************
+        // *** 1. ÖNEMLİ: FIREBASE KONFİGÜRASYONUNUZU BURAYA YAPIŞTIRIN ***
+        // ***************************************************************
+        const firebaseConfig = {
+  apiKey: "AiZaSyACw0EuiKei-JPDnJcRXLWw-J9ntXoSFİ", 
+  authDomain: "newyeargift-2ae9a.firebaseapp.com",
+  projectId: "newyeargift-2ae9a",
+  storageBucket: "newyeargift-2ae9a.appspot.com",
+  messagingSenderId: "21487043286",
+  appId: "1:21487043286:web:4ea67e4b27463c5b49ff77",
+  measurementId: "G-58TDFPD5MH",
+  // 💥 SİZİN EKSİK OLAN DATABASE ADRESİNİZ
+  databaseURL: "https://newyeargift-2ae9a-default-rtdb.europe-west1.firebaseapp.app" 
+};
+        
+        // Firebase Başlatma
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const katilimcilarRef = database.ref('katilimcilar');
+
+        // Sabit İsim Listesi (Bu liste, Firebase'deki isimlerle aynı olmalıdır)
+        const katilimcilar = [
+            "Sueda", "Yaren", "Alican", "Şule", "Seher", 
+            "Fatih", "İlknur", "Tuncay", "Zeynep"
+        ];
+        
+        const secimElementi = document.getElementById('kisiSecimi');
+        const buton = document.getElementById('cekilisYapButon');
+        const sonucDiv = document.getElementById('sonuc');
+
+        // İsimleri Seçim Kutusuna Ekle
+        katilimcilar.forEach(isim => {
+            const option = document.createElement('option');
+            option.value = isim;
+            option.textContent = isim;
+            secimElementi.appendChild(option);
+        });
+
+        // Sayfa Yüklendiğinde veya İsim Değiştiğinde Sonucu Kontrol Et ve Göster
+        async function sonucKontrolVeGoster() {
+            const secilenKisi = secimElementi.value;
+            
+            // 1. Yerel Depolamada (Local Storage) Sonucu Kontrol Et (Gizlilik ve Hız için)
+            const cekilenIsimGizli = localStorage.getItem('cekilis_sonucu_' + secilenKisi);
+
+            if (cekilenIsimGizli) {
+                sonucDiv.textContent = `🎉 Çekiliş sonucun: ${cekilenIsimGizli}`;
+                buton.disabled = true;
+                return; // Yerel sonuç varsa, Firebase'e bakmaya gerek yok.
+            } 
+            
+            // 2. Local Storage boşsa, Firebase'i Kontrol Et (Farklı cihazdan girme durumu)
+            try {
+                const snapshot = await katilimcilarRef.child(secilenKisi).once('value');
+                const dbSonuc = snapshot.val();
+
+                // Eğer Firebase'de kişinin sonucu varsa (Musait değilse ve Cekildi değilse)
+                if (dbSonuc && dbSonuc !== "Musait" && dbSonuc !== "Cekildi") {
+                    // Sonucu Local Storage'a kaydet (Gizliliği korumak için)
+                    localStorage.setItem('cekilis_sonucu_' + secilenKisi, dbSonuc);
+                    sonucDiv.textContent = `🎉 Çekiliş sonucun: ${dbSonuc} (Başka cihazda yapmıştınız)`;
+                    buton.disabled = true;
+                    return;
+                }
+            } catch (error) {
+                console.error("Firebase kontrol hatası:", error);
+                sonucDiv.textContent = 'Veritabanı kontrol edilirken bir hata oluştu.';
+                buton.disabled = true; // Butonu kilitle
+                return;
+            }
+
+            // Sonuç yoksa butonu aktif et
+            sonucDiv.textContent = 'Hazır olduğunda "Kimin Hediyesi Olacağım?" butonuna tıkla.';
+            buton.disabled = false;
+        }
+
+        // Çekiliş Yapma Fonksiyonu (Benzersizlik Garantisi)
+        async function cekilisYap() {
+            const secilenKisi = secimElementi.value;
+            
+            if (localStorage.getItem('cekilis_sonucu_' + secilenKisi)) {
+                sonucDiv.textContent = '❌ Zaten çekiliş yapılmış. Sayfayı yenilemeden önce sonucunuz: ' + localStorage.getItem('cekilis_sonucu_' + secilenKisi);
+                return;
+            }
+
+            buton.disabled = true;
+            sonucDiv.textContent = 'Şanslı ismi çekiyoruz... Lütfen bekleyin.';
+
+            try {
+                // Tüm katilimcilar verisini çek
+                const snapshot = await katilimcilarRef.once('value');
+                const tumVeriler = snapshot.val();
+                
+                // Müsait olan isimleri bul
+                let musaitler = [];
+                for (const isim in tumVeriler) {
+                    // 1. Kendi ismin değil
+                    // 2. Henüz çekilmemiş (Değeri "Musait" olmalı)
+                    if (isim !== secilenKisi && tumVeriler[isim] === 'Musait') {
+                        musaitler.push(isim);
+                    }
+                }
+
+                if (musaitler.length === 0) {
+                    sonucDiv.textContent = 'Üzgünüm, çekiliş yapılacak müsait isim kalmadı. (Tüm isimler çekilmiş olabilir.)';
+                    buton.disabled = true;
+                    return;
+                }
+
+                // Rastgele Müsait İsim Seçme
+                const randomIndex = Math.floor(Math.random() * musaitler.length);
+                const sansliIsim = musaitler[randomIndex];
+
+                // 4. Veritabanı Yazma İşlemleri (Benzersizlik Garantisi için önce çekilenin durumunu değiştiririz)
+                
+                // İlk olarak, hediye olarak çıkan ismin müsaitlik durumunu "Cekildi" olarak güncelle
+                await katilimcilarRef.child(sansliIsim).set('Cekildi');
+                
+                // İkinci olarak, çekilişi yapan kişinin sonucunu kaydet (Gizlilik için)
+                await katilimcilarRef.child(secilenKisi).set(sansliIsim);
+                
+                // İşlem başarılı: Sonucu sadece kullanıcının cihazına kaydet (Gizlilik)
+                localStorage.setItem('cekilis_sonucu_' + secilenKisi, sansliIsim);
+                
+                sonucDiv.textContent = `🎉 TEBRİKLER! Hediye alacağınız kişi: ${sansliIsim}`;
+                buton.disabled = true;
+                
+            } catch (error) {
+                console.error("Çekiliş hatası:", error);
+                sonucDiv.textContent = 'Bir hata oluştu. Lütfen tekrar deneyin.';
+                buton.disabled = false;
+            }
+        }
+
+        // Olay Dinleyicileri
+        buton.addEventListener('click', cekilisYap);
+        secimElementi.addEventListener('change', sonucKontrolVeGoster);
+        
+        // Sayfa yüklendiğinde sonucu kontrol et
+        document.addEventListener('DOMContentLoaded', sonucKontrolVeGoster);
+
+    </script>
+
+</body>
+</html>
